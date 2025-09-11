@@ -1,381 +1,235 @@
--- 🎣 AUTO FISH PRO + RAYFIELD + DEBUG LOGGING — UNTUK ANALISIS ERROR
--- 💡 Remote: sleitnick_net@0.2.0 → RF/UpdateAutoFishingState, RF/ChargeFishingRod, dll
--- 🎨 UI by Rayfield (Official: https://sirius.menu/rayfield)
+-- 🎣 AUTO FISH PRO (FIXED) — Rayfield + Safe Logging
+-- Docs: https://docs.sirius.menu/rayfield
 
-warn("✅ Script dimulai...")
-
--- ⚙️ Load Rayfield dari sumber resmi + fallback
-local success, rayfield = pcall(function()
-    warn("📥 Mencoba load Rayfield dari sirius.menu...")
-    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-end)
-
-if not success or not rayfield then
-    warn("❌ Gagal load dari sirius.menu, mencoba fallback...")
-    success, rayfield = pcall(function()
-        return loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/Build.lua'))()
+-- 1) Load Rayfield (resmi + fallback)
+local Rayfield
+do
+    local ok, lib = pcall(function()
+        return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
     end)
+    if not ok or not lib then
+        ok, lib = pcall(function()
+            return loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/source.lua'))()
+        end)
+    end
+    if not ok or not lib then
+        warn("❌ Rayfield gagal di-load.")
+        return
+    end
+    Rayfield = lib
 end
 
-if not success or not rayfield then
-    warn("❌ Rayfield gagal di-load! Menggunakan UI fallback sederhana.")
-    
-    -- 🧩 Fallback UI Sederhana (TextButton + ScreenGui)
-    local ScreenGui = Instance.new("ScreenGui")
-    local Frame = Instance.new("Frame")
-    local Title = Instance.new("TextLabel")
-    local ToggleBtn = Instance.new("TextButton")
-
-    ScreenGui.Parent = game:GetService("CoreGui")
-    ScreenGui.Name = "AutoFishFallbackUI"
-    ScreenGui.ResetOnSpawn = false
-
-    Frame.Parent = ScreenGui
-    Frame.Size = UDim2.new(0, 220, 0, 100)
-    Frame.Position = UDim2.new(0.5, -110, 0.5, -50)
-    Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Frame.BorderSizePixel = 0
-
-    Title.Parent = Frame
-    Title.Size = UDim2.new(1, 0, 0, 30)
-    Title.BackgroundTransparency = 1
-    Title.Text = "🎣 Auto Fish Fallback"
-    Title.TextColor3 = Color3.fromRGB(240, 240, 240)
-    Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 16
-
-    ToggleBtn.Parent = Frame
-    ToggleBtn.Size = UDim2.new(1, -20, 0, 30)
-    ToggleBtn.Position = UDim2.new(0, 10, 0, 50)
-    ToggleBtn.Text = "Auto Fishing: OFF"
-    ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    ToggleBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
-
-    warn("✅ Fallback UI dibuat!")
-
-    -- 🎯 Services
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local Players = game:GetService("Players")
-    local Workspace = game:GetService("Workspace")
-    local localPlayer = Players.LocalPlayer
-
-    -- ✅ Cari Remote
-    local function getRemotes()
-        local path = ReplicatedStorage.Packages._Index["sleitnick_net@0.2.0"]
-        if not path or not path.net then return {} end
-        return {
-            UpdateAutoFishingState = path.net["RF/UpdateAutoFishingState"],
-            EquipToolFromHotbar = path.net["RE/EquipToolFromHotbar"],
-            ChargeFishingRod = path.net["RF/ChargeFishingRod"]
-        }
-    end
-
-    local remotes = getRemotes()
-
-    -- 🔄 Coba ulang jika remote belum ada
-    spawn(function()
-        while not remotes.UpdateAutoFishingState do
-            wait(2)
-            remotes = getRemotes()
-        end
-    end)
-
-    -- 🎚️ Toggle Auto Fishing
-    local isAutoFish = false
-    ToggleBtn.MouseButton1Click:Connect(function()
-        isAutoFish = not isAutoFish
-        ToggleBtn.Text = "Auto Fishing: " .. (isAutoFish and "ON ✅" or "OFF ❌")
-        
-        if remotes.UpdateAutoFishingState then
-            pcall(function()
-                remotes.UpdateAutoFishingState:InvokeServer(isAutoFish)
-            end)
-            if isAutoFish and remotes.EquipToolFromHotbar then
-                pcall(function()
-                    remotes.EquipToolFromHotbar:FireServer(1)
-                end)
-            end
-        end
-    end)
-
-    warn("✅ Fallback UI aktif! Auto Fishing siap digunakan.")
-    return -- Hentikan script agar tidak lanjut ke Rayfield
-end
-
-warn("✅ Rayfield berhasil di-load!")
-
--- 🎯 Services
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-
-local localPlayer = Players.LocalPlayer
-
--- ✅ Cari RemoteFunction & RemoteEvent
-local function getRemotes()
-    warn("🔍 Mencari remote...")
-    local remotePath = ReplicatedStorage.Packages._Index["sleitnick_net@0.2.0"]
-    if not remotePath then
-        warn("❌ remotePath tidak ditemukan!")
-        return {}, nil
-    end
-    if not remotePath.net then
-        warn("❌ remotePath.net tidak ditemukan!")
-        return {}, nil
-    end
-    
-    local net = remotePath.net
-    local remotes = {
-        UpdateAutoFishingState = net["RF/UpdateAutoFishingState"],
-        EquipToolFromHotbar = net["RE/EquipToolFromHotbar"],
-        ChargeFishingRod = net["RF/ChargeFishingRod"],
-        FishingCompleted = net["RE/FishingCompleted"],
-        FishCaught = net["RE/FishCaught"],
-        UpdateChargeState = net["RE/UpdateChargeState"],
-        BaitSpawned = net["RE/BaitSpawned"],
-        ObtainedNewFishNotification = net["RE/ObtainedNewFishNotification"]
-    }
-
-    -- 🔍 Cari dynamic remote: RF/RequestFishingMinigameStarted
-    local minigameRemote = nil
-    for key, remote in pairs(net) do
-        if key:find("RequestFishingMinigameStarted") or key:find("Sigma") or key:find("RIFT") or key:find("Phonk") then
-            minigameRemote = remote
-            warn("✅ Dynamic Minigame Remote ditemukan:", key)
-            break
-        end
-    end
-    remotes.RequestFishingMinigameStarted = minigameRemote
-
-    warn("✅ Semua remote dicari!")
-    return remotes, remotePath
-end
-
-local remotes, remotePath = getRemotes()
-
--- 🔄 Coba ulang jika belum dimuat
-spawn(function()
-    while not remotes.UpdateAutoFishingState or not remotes.EquipToolFromHotbar do
-        wait(2)
-        remotes, remotePath = getRemotes()
-        if remotes.UpdateAutoFishingState and remotes.EquipToolFromHotbar then
-            warn("✅ Semua remote utama ditemukan!")
-            break
-        end
-    end
-end)
-
--- 🎨 Buat Window
-warn("🎨 Membuat window...")
-local Window = rayfield:CreateWindow({
+-- 2) Buat Window SEBELUM logika lain (agar UI pasti muncul)
+local Window = Rayfield:CreateWindow({
     Name = "🎣 Auto Fishing Pro",
-    Icon = "fish",
+    Icon = "fish",                                 -- Lucide icon oke (docs)
     LoadingTitle = "Loading Auto Fish Pro...",
     LoadingSubtitle = "by Your Assistant",
-    Theme = "Ocean",
-    ToggleUIKeybind = "K",
+    ShowText = "Toggle: [K]",                      -- teks tombol show utk mobile
+    Theme = "Default",                             -- lihat daftar tema di docs
+    ToggleUIKeybind = "K",                         -- sesuai docs
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "AutoFishPro",
         FileName = "Settings"
-    }
+    },
+    Discord = { Enabled = false }
 })
 
-warn("✅ Window dibuat!")
+-- 3) Buat Tab/Section/Controls minimal lebih dulu (UI ready)
+local Main = Window:CreateTab("Main", "fish")
+Main:CreateSection("Auto Fishing")
 
--- 📁 Tab Utama
-local Tab = Window:CreateTab("Main", "fish")
-warn("✅ Tab dibuat!")
+-- State flags (Rayfield.Flags juga bisa, tapi kita simpan ref element)
+local ToggleAutoFish, TogglePerfect, ToggleAutoClick, ToggleAutoRestart, SliderDelay
 
--- 🧭 Section Controls
-Tab:CreateSection("Auto Fishing")
-warn("✅ Section dibuat!")
-
--- 🎚️ Toggle Auto Fishing
-local ToggleAutoFish = Tab:CreateToggle({
+ToggleAutoFish = Main:CreateToggle({
     Name = "Enable Auto Fishing",
     Description = "Aktifkan sistem auto fishing",
     CurrentValue = false,
     Flag = "AutoFishToggle",
-    Callback = function(Value)
-        warn("🎣 Toggle Auto Fishing:", Value)
-        local remote = remotes.UpdateAutoFishingState
-        if remote then
-            local success = pcall(function()
-                remote:InvokeServer(Value)
-            end)
-            if success then
-                warn("✅ Auto Fishing " .. (Value and "ON" or "OFF"))
-                if Value and remotes.EquipToolFromHotbar then
-                    pcall(function()
-                        remotes.EquipToolFromHotbar:FireServer(1)
-                        warn("🪝 Rod slot 1 otomatis di-equip!")
-                    end)
-                end
-            else
-                warn("❌ Gagal mengubah status Auto Fishing!")
-            end
-        else
-            warn("❌ Remote Auto Fishing tidak ditemukan!")
-        end
-    end
+    Callback = function(val) end -- diisi setelah remotes siap
 })
 
-warn("✅ Toggle Auto Fishing dibuat!")
-
--- 🎯 Toggle Auto Perfect Catch
-local TogglePerfect = Tab:CreateToggle({
+TogglePerfect = Main:CreateToggle({
     Name = "Auto Perfect Catch",
-    Description = "Auto klik saat mini game muncul untuk perfect catch",
+    Description = "Auto klik saat minigame muncul",
     CurrentValue = true,
-    Flag = "AutoPerfect",
-    Callback = function(Value)
-        warn("🎯 Auto Perfect Catch:", Value)
-    end
+    Flag = "AutoPerfect"
 })
 
-warn("✅ Toggle Auto Perfect dibuat!")
-
--- 🖱️ Toggle Auto Click Reel
-local ToggleAutoClick = Tab:CreateToggle({
+ToggleAutoClick = Main:CreateToggle({
     Name = "Auto Click Reel",
-    Description = "Auto klik saat ikan mulai melawan",
+    Description = "Auto klik saat ikan melawan",
     CurrentValue = true,
-    Flag = "AutoClickReel",
-    Callback = function(Value)
-        warn("🖱️ Auto Click Reel:", Value)
-    end
+    Flag = "AutoClickReel"
 })
 
-warn("✅ Toggle Auto Click dibuat!")
-
--- 🔄 Toggle Auto Restart
-local ToggleAutoRestart = Tab:CreateToggle({
+ToggleAutoRestart = Main:CreateToggle({
     Name = "Auto Restart Fishing",
-    Description = "Otomatis lempar umpan lagi setelah selesai",
+    Description = "Otomatis lempar lagi setelah selesai",
     CurrentValue = true,
-    Flag = "AutoRestart",
-    Callback = function(Value)
-        warn("🔄 Auto Restart Fishing:", Value)
-    end
+    Flag = "AutoRestart"
 })
 
-warn("✅ Toggle Auto Restart dibuat!")
-
--- 🕒 Slider Delay Antara Lemparan
-local SliderDelay = Tab:CreateSlider({
+SliderDelay = Main:CreateSlider({
     Name = "Delay Between Casts (detik)",
     Description = "Jeda sebelum lempar umpan lagi",
     Range = {0.5, 5},
     Increment = 0.1,
     Suffix = "s",
     CurrentValue = 1.5,
-    Flag = "CastDelay",
-    Callback = function(Value)
-        warn("🕒 Delay lempar:", Value)
-    end
+    Flag = "CastDelay"
 })
 
-warn("✅ Slider Delay dibuat!")
-
--- 🎯 Tombol Manual Trigger
-Tab:CreateButton({
+Main:CreateButton({
     Name = "▶️ Force Start Fishing",
     Description = "Paksa mulai fishing sekarang",
-    Callback = function()
-        warn("▶️ Force Start Fishing ditekan!")
-        if remotes.ChargeFishingRod then
-            local success = pcall(function()
-                remotes.ChargeFishingRod:InvokeServer(Workspace:GetServerTimeNow())
-            end)
-            if success then
-                warn("✅ Fishing dipaksa mulai!")
-            else
-                warn("❌ Gagal memulai fishing!")
-            end
-        else
-            warn("❌ Remote ChargeFishingRod tidak ditemukan!")
-        end
-    end
+    Callback = function() end -- diisi setelah remotes siap
 })
 
-warn("✅ Tombol Force Start dibuat!")
-
--- 🪝 Tombol Manual Equip Rod
-Tab:CreateButton({
+Main:CreateButton({
     Name = "🪝 Equip Rod Slot 1",
     Description = "Manual equip fishing rod di slot 1",
-    Callback = function()
-        warn("🪝 Equip Rod ditekan!")
-        if remotes.EquipToolFromHotbar then
-            pcall(function()
-                remotes.EquipToolFromHotbar:FireServer(1)
-                warn("✅ Rod slot 1 berhasil di-equip!")
-            end)
-        else
-            warn("❌ Remote Equip Tool tidak ditemukan!")
-        end
-    end
+    Callback = function() end -- diisi setelah remotes siap
 })
 
-warn("✅ Tombol Equip Rod dibuat!")
+-- Muat config yg tersimpan (kalau ada); aman dipanggil setelah elemen dibuat
+pcall(function() Rayfield:LoadConfiguration() end)
 
--- 🎯 Hook Event: Saat mini game dimulai → auto perfect
-if remotePath and remotePath.net then
-    for key, remote in pairs(remotePath.net) do
-        if typeof(remote) == "RBXScriptSignal" and (
-            key:find("RequestFishingMinigameStarted") or 
-            key:find("Sigma") or 
-            key:find("RIFT") or 
-            key:find("Phonk")
-        ) then
-            warn("🔗 Hooking dynamic minigame remote:", key)
-            local oldInvoke = remote.OnClientInvoke
-            remote.OnClientInvoke = function(...)
-                if TogglePerfect.CurrentValue then
-                    warn("🎯 Mini game terdeteksi! Mencoba perfect catch...")
-                    wait(0.1)
-                    if remotes.FishingCompleted then
-                        pcall(function()
-                            remotes.FishingCompleted:FireServer()
-                            warn("✅ Perfect catch berhasil!")
-                        end)
-                    end
-                end
-                if oldInvoke then
-                    return oldInvoke(remote, ...)
-                end
-            end
-            warn("✅ Berhasil hook dynamic minigame remote:", key)
+-- 4) Services & pencarian remote (tidak blok UI)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+
+local remotes = {}
+local function findRemotes()
+    local idx = ReplicatedStorage:FindFirstChild("Packages")
+        and ReplicatedStorage.Packages:FindFirstChild("_Index")
+    if not idx then return end
+
+    local pack = idx:FindFirstChild("sleitnick_net@0.2.0")
+    if not pack or not pack:FindFirstChild("net") then return end
+    local net = pack.net
+
+    remotes.UpdateAutoFishingState   = net:FindFirstChild("RF/UpdateAutoFishingState")
+    remotes.EquipToolFromHotbar      = net:FindFirstChild("RE/EquipToolFromHotbar")
+    remotes.ChargeFishingRod         = net:FindFirstChild("RF/ChargeFishingRod")
+    remotes.FishingCompleted         = net:FindFirstChild("RE/FishingCompleted")
+    remotes.FishCaught               = net:FindFirstChild("RE/FishCaught")
+    remotes.UpdateChargeState        = net:FindFirstChild("RE/UpdateChargeState")
+    remotes.BaitSpawned              = net:FindFirstChild("RE/BaitSpawned")
+    remotes.ObtainedNewFishNotification = net:FindFirstChild("RE/ObtainedNewFishNotification")
+
+    -- (Opsional) Cari RF minigame kalau developer game pakai nama custom
+    for _, obj in ipairs(net:GetChildren()) do
+        if obj:IsA("RemoteFunction") and obj.Name:lower():find("minigame") then
+            remotes.RequestFishingMinigameStarted = obj
+            break
         end
     end
-else
-    warn("❌ remotePath.net tidak tersedia untuk hook!")
 end
 
-warn("✅ Semua hook dipasang!")
+-- jalankan awal + retry ringan
+findRemotes()
+task.spawn(function()
+    local t0 = os.clock()
+    while (not remotes.UpdateAutoFishingState or not remotes.EquipToolFromHotbar) and os.clock()-t0 < 15 do
+        task.wait(1.5)
+        findRemotes()
+    end
+end)
 
--- 🎣 Hook Event: Saat ikan tertangkap → auto restart
-if remotes.FishCaught then
-    remotes.FishCaught.OnClientEvent:Connect(function(fishId, data)
-        warn("🐟 Ikan tertangkap! ID:", fishId, "Berat:", data.Weight)
-        if ToggleAutoRestart.CurrentValue then
-            spawn(function()
-                wait(SliderDelay.CurrentValue)
-                if ToggleAutoFish.CurrentValue then
-                    if remotes.ChargeFishingRod then
-                        pcall(function()
-                            remotes.ChargeFishingRod:InvokeServer(Workspace:GetServerTimeNow())
-                        end)
-                    end
+-- 5) Isi callback setelah remote ada (callback aman terhadap nil)
+local function safeInvokeRF(rf, ...)
+    if rf and rf:IsA("RemoteFunction") then
+        local ok, res = pcall(function() return rf:InvokeServer(...) end)
+        if not ok then warn("RF error:", res) end
+        return ok, res
+    end
+    return false, "No RF"
+end
+
+local function safeFireRE(re, ...)
+    if re and re:IsA("RemoteEvent") then
+        local ok, err = pcall(function() re:FireServer(...) end)
+        if not ok then warn("RE error:", err) end
+        return ok
+    end
+    return false
+end
+
+-- Toggle Auto Fishing
+ToggleAutoFish.Callback = function(Value)
+    local ok = safeInvokeRF(remotes.UpdateAutoFishingState, Value)
+    if ok and Value then
+        safeFireRE(remotes.EquipToolFromHotbar, 1) -- equip rod slot 1
+    end
+end
+
+-- Force Start
+Main.Elements["▶️ Force Start Fishing"].Callback = function()
+    safeInvokeRF(remotes.ChargeFishingRod, Workspace:GetServerTimeNow())
+end
+
+-- Equip slot 1
+Main.Elements["🪝 Equip Rod Slot 1"].Callback = function()
+    safeFireRE(remotes.EquipToolFromHotbar, 1)
+end
+
+-- Hook FishCaught -> Auto restart
+task.spawn(function()
+    -- tunggu RE tersedia
+    local t0 = os.clock()
+    while not remotes.FishCaught and os.clock()-t0 < 15 do
+        task.wait(1)
+    end
+    if remotes.FishCaught and remotes.FishCaught:IsA("RemoteEvent") then
+        remotes.FishCaught.OnClientEvent:Connect(function(fishId, data)
+            if ToggleAutoRestart.CurrentValue and ToggleAutoFish.CurrentValue then
+                task.delay(SliderDelay.CurrentValue, function()
+                    safeInvokeRF(remotes.ChargeFishingRod, Workspace:GetServerTimeNow())
+                end)
+            end
+        end)
+    end
+end)
+
+-- (Opsional) Auto Perfect: kalau ada RF minigame yang dipanggil ke client
+-- NOTE: tidak mencoba menimpa OnClientInvoke milik object non-RemoteFunction.
+task.spawn(function()
+    local t0 = os.clock()
+    while not remotes.RequestFishingMinigameStarted and os.clock()-t0 < 10 do
+        task.wait(1)
+        findRemotes()
+    end
+    local rf = remotes.RequestFishingMinigameStarted
+    if rf and rf:IsA("RemoteFunction") then
+        -- Simpel: saat RF dipanggil server -> kita balas sukses cepat (simulasi perfect)
+        local old = rf.OnClientInvoke
+        rf.OnClientInvoke = function(...)
+            if TogglePerfect.CurrentValue then
+                -- Bila game dev mengharapkan nilai return tertentu, sesuaikan di sini
+                -- Default: kembalikan apapun dari old atau true
+                if old then
+                    local ok, ret = pcall(old, ...)
+                    if ok then return ret end
                 end
-            end)
+                return true
+            else
+                if old then
+                    local ok, ret = pcall(old, ...)
+                    if ok then return ret end
+                end
+                return nil
+            end
         end
-    end)
-    warn("✅ Hook FishCaught dipasang!")
-else
-    warn("❌ Remote FishCaught tidak ditemukan!")
-end
+    end
+end)
 
-warn("🎉 Script selesai di-load! UI seharusnya muncul.")
+-- Selesai
+print("✅ Auto Fishing Pro loaded. Tekan [K] untuk toggle UI.")
