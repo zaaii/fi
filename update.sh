@@ -327,7 +327,7 @@ echo "Test:"
 echo "curl http://localhost:3000/health"
 EOF
 
-chmod +x proxy-server-update.sh
+chmod +x asdasdas.sh
 
 echo "✅ Script created: proxy-server-update.sh"
 
